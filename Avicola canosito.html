@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2F5D45">
+<title>Avícola Canosito — Movimientos por lote</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#EEF0EA; --surface:#FFFFFF; --surface-2:#F6F7F3;
+    --ink:#1E2A22; --ink-soft:#5F6E63;
+    --verde:#2F5D45; --verde-dark:#22452F;
+    --maiz:#B8820F; --ingreso:#2F7D5D; --ingreso-soft:#DEEFE6;
+    --egreso-soft:#F7EEDA; --danger:#A93B2C; --activo:#6A5A93;
+    --line:#D2D8CE; --radius:10px;
+    --display:'Zilla Slab', Georgia, serif;
+    --body:'IBM Plex Sans', system-ui, sans-serif;
+    --mono:'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);-webkit-text-size-adjust:100%;}
+  .wrap{max-width:860px;margin:0 auto;padding:22px 16px 70px;}
+
+  header h1{font-family:var(--display);font-size:27px;font-weight:600;margin:0;letter-spacing:-.01em;}
+  header p{margin:2px 0 0;font-size:13.5px;color:var(--ink-soft);}
+  .sync-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+            font-family:var(--mono);font-size:11.5px;color:var(--ink-soft);margin:14px 0 14px;}
+
+  /* Selector múltiple de lotes */
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
+  .chip-lote{font-family:var(--mono);font-size:13px;padding:7px 13px;border-radius:20px;
+             background:var(--surface);border:1px solid var(--line);color:var(--ink-soft);cursor:pointer;}
+  .chip-lote.on{background:var(--verde);border-color:var(--verde);color:#fff;}
+
+  /* Resumen */
+  .resumen{background:var(--verde);color:#EDF3EE;border-radius:var(--radius);padding:18px;margin-bottom:14px;}
+  .resumen-label{font-size:12.5px;color:#B9CFC2;margin:0 0 2px;}
+  .resumen-cifra{font-family:var(--mono);font-size:34px;font-weight:600;line-height:1;letter-spacing:-.02em;}
+  .resumen-cifra.neg{color:#F2C0B7;}
+  .resumen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-top:16px;
+                border-top:1px solid rgba(255,255,255,.18);padding-top:13px;}
+  .stat span{display:block;font-size:11.5px;color:#B9CFC2;}
+  .stat strong{font-family:var(--mono);font-size:15.5px;font-weight:500;}
+  .stat em{display:block;font-family:var(--mono);font-size:11.5px;color:#9FBDAD;font-style:normal;margin-top:1px;}
+  .stat.destacado strong{font-size:19px;color:#FFE3A8;}
+  @media(max-width:560px){.resumen-grid{grid-template-columns:repeat(2,1fr);row-gap:14px;}
+                          .resumen-cifra{font-size:29px;}}
+
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;}
+  .panel-title{font-family:var(--display);font-size:16px;font-weight:600;margin:0 0 12px;}
+  .leyenda{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-soft);margin-top:8px;}
+  .leyenda i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px;}
+
+  .form-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+  .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:132px;}
+  .field.grow{flex:2.4;min-width:200px;}
+  .field.narrow{flex:.8;min-width:112px;}
+  .field label{font-size:12px;color:var(--ink-soft);}
+  input,select,textarea{font-family:var(--body);font-size:15px;background:var(--surface-2);
+        border:1px solid var(--line);border-radius:7px;padding:9px 10px;width:100%;color:var(--ink);}
+  input[type=number]{font-family:var(--mono);}
+  input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--verde);outline-offset:1px;}
+  .calc{font-family:var(--mono);font-size:12px;color:var(--ink-soft);margin:-2px 0 10px;}
+  button{font-family:var(--body);font-weight:600;cursor:pointer;border:none;border-radius:7px;}
+  .btn-primary{background:var(--verde);color:#fff;padding:11px 22px;font-size:15px;}
+  .btn-primary:disabled{opacity:.55;cursor:default;}
+  .btn-export{background:var(--maiz);color:#fff;padding:9px 14px;font-size:13.5px;}
+  .btn-ghost{background:var(--surface-2);color:var(--verde);border:1px solid var(--line);padding:8px 12px;font-size:13px;}
+  .form-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
+  .filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  .filtros select,.filtros input{width:auto;flex:1;min-width:120px;}
+
+  .hist-toggle{width:100%;display:flex;justify-content:space-between;align-items:center;
+               background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+               padding:13px 15px;font-size:15px;color:var(--ink);font-family:var(--display);}
+  .hist-toggle span.cont{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);font-weight:400;}
+
+  .fecha-head{font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+              margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--line);}
+  .list{display:flex;flex-direction:column;gap:7px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--maiz);
+        border-radius:9px;padding:11px 13px;display:flex;align-items:flex-start;gap:12px;}
+  .card.ingreso{border-left-color:var(--ingreso);}
+  .card.activo{border-left-color:var(--activo);}
+  .card-body{flex:1;min-width:0;}
+  .card-desc{font-size:15.5px;font-weight:500;}
+  .card-meta{font-size:13px;color:var(--ink-soft);margin-top:3px;}
+  .card-meta .mono{font-family:var(--mono);}
+  .card-obs{font-size:12.5px;color:var(--ink-soft);margin-top:4px;font-style:italic;}
+  .chip{font-size:11.5px;padding:2px 8px;border-radius:20px;background:var(--surface-2);
+        border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap;}
+  .chip.pendiente{background:var(--egreso-soft);border-color:#E4CE9C;color:#8A6209;}
+  .chip.ok{background:var(--ingreso-soft);border-color:#A9CFBC;color:var(--ingreso);}
+  .chip.reparto{background:#EDEAF4;border-color:#C6BCDD;color:var(--activo);}
+  .card-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+  .monto{font-family:var(--mono);font-size:16px;font-weight:600;white-space:nowrap;}
+  .monto.ingreso{color:var(--ingreso);}
+  .acciones{display:flex;gap:2px;}
+  .icon-btn{background:transparent;color:var(--ink-soft);font-size:14px;padding:3px 6px;line-height:1;}
+  .icon-btn:hover{color:var(--verde);}
+  .icon-btn.del:hover{color:var(--danger);}
+  .empty{text-align:center;padding:34px 20px;color:var(--ink-soft);font-size:14.5px;}
+  .editando{border:2px solid var(--maiz);}
+  [hidden]{display:none !important;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Avícola Canosito</h1>
+    <p>Movimientos de inversión, gasto e ingreso por lote</p>
+  </header>
+
+  <div class="sync-row">
+    <span id="syncLabel">Conectando…</span>
+    <button type="button" class="btn-ghost" onclick="refreshData()">↻ Actualizar</button>
+    <button type="button" class="btn-ghost" id="errBtn" hidden onclick="alert(ultimoError)">⚠ Ver error</button>
+  </div>
+
+  <div class="chips" id="loteChips"></div>
+
+  <section class="resumen">
+    <p class="resumen-label" id="resLabel">Utilidad</p>
+    <div class="resumen-cifra" id="resUtilidad">$0,00</div>
+    <div class="resumen-grid">
+      <div class="stat"><span>Egresos</span><strong id="resEgresos">$0,00</strong><em id="resCuota"></em></div>
+      <div class="stat"><span>Ingresos</span><strong id="resIngresos">$0,00</strong></div>
+      <div class="stat destacado"><span>Costo por libra</span><strong id="resCostoLibra">—</strong><em id="resVentaLibra"></em></div>
+      <div class="stat"><span>Cobrado</span><strong id="resCobrado">$0,00</strong></div>
+      <div class="stat"><span>Por cobrar</span><strong id="resPorCobrar">$0,00</strong></div>
+      <div class="stat"><span>Por pagar</span><strong id="resPorPagar">$0,00</strong></div>
+      <div class="stat"><span>Libras vendidas</span><strong id="resLibras">—</strong></div>
+      <div class="stat"><span>Pollos comprados</span><strong id="resAves">—</strong></div>
+      <div class="stat"><span>Costo por pollo</span><strong id="resCostoAve">—</strong></div>
+    </div>
+  </section>
+
+  <div class="panel">
+    <p class="panel-title">Comparativo entre lotes</p>
+    <div id="chartBox"></div>
+    <div class="leyenda">
+      <span><i style="background:var(--verde)"></i>Utilidad (eje izquierdo)</span>
+      <span><i style="background:var(--maiz)"></i>Costo por libra (eje derecho)</span>
+    </div>
+  </div>
+
+  <div class="panel" id="formPanel">
+    <p class="panel-title" id="formTitle">Nuevo movimiento</p>
+    <form id="movForm" onsubmit="handleSubmit(event)">
+      <div class="form-row">
+        <div class="field"><label for="f-fecha">Fecha</label>
+          <input type="date" id="f-fecha" required></div>
+        <div class="field"><label for="f-lote">Lote</label>
+          <select id="f-lote" onchange="handleLoteChange()" required></select></div>
+        <div class="field"><label for="f-valoracion">Valoración</label>
+          <select id="f-valoracion" onchange="aplicarValoracion()">
+            <option>Inversión</option><option>Gasto</option>
+            <option>Ingreso</option><option>Activo</option>
+          </select></div>
+        <div class="field narrow" id="wrapAmort" hidden>
+          <label for="f-amortizar">Repartir en (lotes)</label>
+          <input type="number" id="f-amortizar" min="1" step="1" value="1"></div>
+      </div>
+
+      <div class="form-row">
+        <div class="field grow"><label for="f-desc">Descripción</label>
+          <input type="text" id="f-desc" list="descripciones" placeholder="Balanceado crecimiento" required>
+          <datalist id="descripciones"></datalist></div>
+        <div class="field narrow"><label for="f-unidades">Cantidad</label>
+          <input type="number" id="f-unidades" step="0.01" min="0" value="1" oninput="calcTotal()" required></div>
+        <div class="field narrow"><label for="f-medida">Medida</label>
+          <select id="f-medida">
+            <option value="unidades">unidades</option><option value="libras">libras</option>
+            <option value="sacos">sacos</option><option value="servicio">servicio</option>
+          </select></div>
+        <div class="field narrow"><label for="f-precio">Precio unitario</label>
+          <input type="number" id="f-precio" step="0.0001" min="0" placeholder="0,00" oninput="calcTotal()" required></div>
+        <div class="field narrow"><label for="f-total">Total</label>
+          <input type="number" id="f-total" step="0.01" min="0" required></div>
+      </div>
+      <p class="calc" id="calcHint">El total se calcula solo; puedes corregirlo si hubo descuento.</p>
+
+      <div class="form-row">
+        <div class="field grow"><label for="f-contraparte">Cliente / Proveedor</label>
+          <input type="text" id="f-contraparte" list="contrapartes" placeholder="Agripac">
+          <datalist id="contrapartes"></datalist></div>
+        <div class="field"><label for="f-status">Status</label>
+          <select id="f-status">
+            <option>Pagado</option><option>Pendiente</option>
+            <option>Cobrado</option><option>Por cobrar</option>
+          </select></div>
+        <div class="field grow"><label for="f-obs">Observación</label>
+          <input type="text" id="f-obs" placeholder="Opcional"></div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-primary" id="submitBtn">Guardar movimiento</button>
+        <button type="button" class="btn-ghost" id="cancelBtn" onclick="cancelarEdicion()" hidden>Cancelar edición</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="filtros">
+    <select id="valFilter" onchange="setFiltro('valoracion',this.value)">
+      <option value="Todas">Toda valoración</option>
+      <option>Inversión</option><option>Gasto</option>
+      <option>Ingreso</option><option>Activo</option>
+    </select>
+    <select id="statusFilter" onchange="setFiltro('status',this.value)">
+      <option value="Todas">Todo status</option>
+      <option>Pagado</option><option>Pendiente</option>
+      <option>Cobrado</option><option>Por cobrar</option>
+    </select>
+    <input type="search" id="searchInput" placeholder="Buscar descripción o proveedor"
+           oninput="setFiltro('texto',this.value)" style="flex:2;min-width:170px;">
+    <button type="button" class="btn-export" onclick="exportToExcel()">⬇ Excel</button>
+  </div>
+
+  <button type="button" class="hist-toggle" onclick="toggleHist()" aria-expanded="false" id="histBtn">
+    <span>Historial de movimientos</span>
+    <span class="cont" id="histCont">▾</span>
+  </button>
+  <div id="listContainer" hidden></div>
+</div>
+
+<script>
+/* Pega aquí la URL de tu Apps Script (termina en /exec) */
+const API_URL = 'https://script.google.com/macros/s/AKfycbyfBdJ_W3xohVsZoeUVkWlTIAbGI-X4MOgdbU-I74QWeSLJRUI-VcE3ek9mJvnRRQkd/exec';
+
+const SEED_DESC = ['Pollo BB','Balanceado inicial','Balanceado crecimiento','Balanceado engorde',
+  'Medicinas','Vitaminas','Vacunas','Viruta','Gas','Transporte','Mano de obra',
+  'Venta de pollo en pie','Venta de pollo faenado','Galpón','Comederos','Bebederos','Criadora'];
+const NUEVO_LOTE = '__nuevo__';
+
+let ultimoError = 'Sin errores registrados.';
+let registros = [];
+let lotesExtra = [];
+let lotesSel = [];            // vacío = todos los lotes
+let loteForm = '';
+let filtros = { valoracion:'Todas', status:'Todas', texto:'' };
+let editandoId = null;
+let histAbierto = false;
+
+const money  = n => new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'}).format(Number(n)||0);
+const money4 = n => '$'+ new Intl.NumberFormat('es-EC',{minimumFractionDigits:3,maximumFractionDigits:3}).format(Number(n)||0);
+const num    = n => new Intl.NumberFormat('es-EC',{maximumFractionDigits:2}).format(Number(n)||0);
+const todayISO = () => { const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); };
+const fmtClock = () => new Date().toLocaleTimeString('es-EC',{hour:'2-digit',minute:'2-digit'});
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
+function fechaLarga(iso){
+  const p = String(iso||'').split('-');
+  if(p.length!==3) return iso||'';
+  const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return `${Number(p[2])} ${meses[Number(p[1])-1]} ${p[0]}`;
+}
+const esPendiente = s => /pendiente|por cobrar/i.test(s||'');
+
+/* ------------------------------- API ---------------------------------- */
+const ERR_CORS = 'El navegador no pudo llegar a Apps Script.\n\n'
+  + 'Causa casi siempre: la implementación no está pública.\n'
+  + 'Apps Script > Implementar > Administrar implementaciones > lápiz >\n'
+  + 'Quién tiene acceso: Cualquier usuario > Versión: Nueva versión > Implementar.';
+
+async function leerRespuesta(res){
+  const texto = await res.text();
+  if(!res.ok) throw new Error(`Google respondió ${res.status}. Revisa que la URL termine en /exec.`);
+  if(texto.trim().startsWith('<')) throw new Error('Google devolvió una página de inicio de sesión.\n\n'+ERR_CORS);
+  let json;
+  try{ json = JSON.parse(texto); }
+  catch(e){ throw new Error('Respuesta ilegible de Apps Script:\n'+texto.slice(0,200)); }
+  if(json.error) throw new Error('Apps Script informó: '+json.error);
+  return json;
+}
+async function apiGet(){
+  let res;
+  try{ res = await fetch(`${API_URL}?action=list`); }catch(e){ throw new Error(ERR_CORS); }
+  return leerRespuesta(res);
+}
+async function apiPost(payload){
+  let res;
+  try{ res = await fetch(API_URL, { method:'POST', body: JSON.stringify(payload) }); }
+  catch(e){ throw new Error(ERR_CORS); }
+  return leerRespuesta(res);
+}
+async function refreshData(){
+  try{
+    const data = await apiGet();
+    registros = (data.registros||[]).map(r => ({
+      ...r,
+      medida: r.medida || 'unidades',
+      unidades: Number(r.unidades)||0,
+      precioUnidad: Number(r.precioUnidad)||0,
+      totalCosto: Number(r.totalCosto)||0,
+      amortizar: Math.max(1, Number(r.amortizar)||1)
+    }));
+    document.getElementById('syncLabel').textContent = `Actualizado ${fmtClock()} · ${registros.length} movimientos`;
+    document.getElementById('errBtn').hidden = true;
+    poblarListas(); render();
+  }catch(e){
+    document.getElementById('syncLabel').textContent = 'Sin conexión — toca "Ver error"';
+    ultimoError = e.message;
+    document.getElementById('errBtn').hidden = false;
+  }
+}
+
+/* ------------------------------- Lotes --------------------------------- */
+function lotesAsc(){
+  const desdeDatos = registros.map(r=>r.lote).filter(Boolean);
+  return [...new Set([...desdeDatos, ...lotesExtra])].sort();
+}
+function siguienteLote(){
+  const nums = lotesAsc()
+    .map(l => { const m=/^L(\d+)$/i.exec(String(l).trim()); return m?parseInt(m[1],10):null; })
+    .filter(n => n!==null);
+  return 'L' + String(nums.length ? Math.max(...nums)+1 : 1).padStart(3,'0');
+}
+function seleccion(){ return lotesSel.length ? lotesSel : lotesAsc(); }
+
+function toggleLote(l){
+  if(l===null){ lotesSel = []; }
+  else{
+    const i = lotesSel.indexOf(l);
+    if(i>=0) lotesSel.splice(i,1); else lotesSel.push(l);
+  }
+  poblarChips(); render();
+}
+function poblarChips(){
+  const lotes = lotesAsc().slice().reverse();
+  const cont = document.getElementById('loteChips');
+  cont.innerHTML =
+    `<button type="button" class="chip-lote ${lotesSel.length?'':'on'}" onclick="toggleLote(null)">Todos</button>` +
+    lotes.map(l=>`<button type="button" class="chip-lote ${lotesSel.includes(l)?'on':''}"
+       onclick="toggleLote('${escapeHtml(l)}')">${escapeHtml(l)}</button>`).join('');
+}
+function handleLoteChange(){
+  const sel = document.getElementById('f-lote');
+  if(sel.value !== NUEVO_LOTE){ loteForm = sel.value; return; }
+  const propuesto = prompt('Nombre del nuevo lote:', siguienteLote());
+  const nombre = (propuesto||'').trim().toUpperCase();
+  if(!nombre){ sel.value = loteForm; return; }
+  if(!lotesAsc().includes(nombre)) lotesExtra.push(nombre);
+  loteForm = nombre;
+  poblarListas(); poblarChips();
+}
+
+/* --------------------------- Cálculo por lote --------------------------- */
+/** Reparte cada Activo entre su lote y los siguientes, según "amortizar". */
+function cuotasActivos(){
+  const lotes = lotesAsc();
+  const mapa = {};
+  lotes.forEach(l => mapa[l]=0);
+  registros.filter(r=>r.valoracion==='Activo').forEach(a=>{
+    const i = lotes.indexOf(a.lote);
+    if(i<0) return;
+    const n = Math.max(1, Number(a.amortizar)||1);
+    const alcance = lotes.slice(i, i+n);
+    if(!alcance.length) return;
+    const cuota = a.totalCosto / n;
+    alcance.forEach(l => { mapa[l] += cuota; });
+  });
+  return mapa;
+}
+
+function metricas(sel){
+  const cuotas = cuotasActivos();
+  const base = registros.filter(r => sel.includes(r.lote));
+  const dir  = base.filter(r => r.valoracion==='Inversión' || r.valoracion==='Gasto');
+  const ing  = base.filter(r => r.valoracion==='Ingreso');
+  const act  = base.filter(r => r.valoracion==='Activo');
+
+  const cuota    = sel.reduce((s,l)=> s + (cuotas[l]||0), 0);
+  const egresos  = dir.reduce((s,r)=>s+r.totalCosto,0) + cuota;
+  const ingresos = ing.reduce((s,r)=>s+r.totalCosto,0);
+
+  const vLb      = ing.filter(r=>r.medida==='libras');
+  const libras   = vLb.reduce((s,r)=>s+r.unidades,0);
+  const ingLb    = vLb.reduce((s,r)=>s+r.totalCosto,0);
+  const aves     = dir.filter(r=>/pollo\s*bb/i.test(r.descripcion||'')).reduce((s,r)=>s+r.unidades,0);
+
+  return {
+    egresos, ingresos, cuota, utilidad: ingresos-egresos, libras, ingLb, aves,
+    cobrado:   ing.filter(r=>!esPendiente(r.status)).reduce((s,r)=>s+r.totalCosto,0),
+    porCobrar: ing.filter(r=> esPendiente(r.status)).reduce((s,r)=>s+r.totalCosto,0),
+    porPagar:  dir.concat(act).filter(r=>esPendiente(r.status)).reduce((s,r)=>s+r.totalCosto,0)
+  };
+}
+
+function pintarResumen(){
+  const sel = seleccion();
+  const m = metricas(sel);
+  document.getElementById('resLabel').textContent =
+    lotesSel.length===0 ? 'Utilidad acumulada — todos los lotes'
+    : lotesSel.length===1 ? `Utilidad del lote ${lotesSel[0]}`
+    : `Utilidad de ${lotesSel.length} lotes seleccionados`;
+
+  const cifra = document.getElementById('resUtilidad');
+  cifra.textContent = money(m.utilidad);
+  cifra.classList.toggle('neg', m.utilidad < 0);
+
+  document.getElementById('resEgresos').textContent   = money(m.egresos);
+  document.getElementById('resCuota').textContent     = m.cuota ? 'incluye '+money(m.cuota)+' de activos' : '';
+  document.getElementById('resIngresos').textContent  = money(m.ingresos);
+  document.getElementById('resCostoLibra').textContent= m.libras ? money4(m.egresos/m.libras) : '—';
+  document.getElementById('resVentaLibra').textContent= m.libras ? 'venta '+money4(m.ingLb/m.libras) : 'faltan ventas en libras';
+  document.getElementById('resCobrado').textContent   = money(m.cobrado);
+  document.getElementById('resPorCobrar').textContent = money(m.porCobrar);
+  document.getElementById('resPorPagar').textContent  = money(m.porPagar);
+  document.getElementById('resLibras').textContent    = m.libras ? num(m.libras)+' lb' : '—';
+  document.getElementById('resAves').textContent      = m.aves ? num(m.aves) : '—';
+  document.getElementById('resCostoAve').textContent  = m.aves ? money(m.egresos/m.aves) : '—';
+}
+
+/* ------------------------------ Gráfico -------------------------------- */
+function pintarGrafico(){
+  const lotes = lotesAsc();
+  const box = document.getElementById('chartBox');
+  if(lotes.length < 1){ box.innerHTML = `<div class="empty">Aún no hay lotes que comparar.</div>`; return; }
+
+  const datos = lotes.map(l=>{
+    const m = metricas([l]);
+    return { lote:l, utilidad:m.utilidad, costoLb: m.libras ? m.egresos/m.libras : null };
+  });
+
+  const W=720, H=250, mT=16, mR=56, mB=38, mL=62;
+  const w = W-mL-mR, h = H-mT-mB;
+  const n = datos.length;
+  const px = i => n===1 ? mL+w/2 : mL + i*(w/(n-1));
+
+  const us = datos.map(d=>d.utilidad);
+  let uMax = Math.max(0, ...us), uMin = Math.min(0, ...us);
+  if(uMax===uMin){ uMax += 1; uMin -= 1; }
+  const pad = (uMax-uMin)*0.12; uMax += pad; uMin -= pad;
+  const yU = v => mT + (uMax-v)/(uMax-uMin)*h;
+
+  const cs = datos.map(d=>d.costoLb).filter(v=>v!==null);
+  const cMax = cs.length ? Math.max(...cs)*1.25 : 1;
+  const yC = v => mT + (cMax-v)/cMax*h;
+
+  // línea de utilidad
+  const puntosU = datos.map((d,i)=>`${px(i)},${yU(d.utilidad).toFixed(1)}`).join(' ');
+
+  // línea de costo por libra: solo tramos con datos consecutivos
+  let tramos=[], actual=[];
+  datos.forEach((d,i)=>{
+    if(d.costoLb===null){ if(actual.length>1) tramos.push(actual); actual=[]; }
+    else actual.push(`${px(i)},${yC(d.costoLb).toFixed(1)}`);
+  });
+  if(actual.length>1) tramos.push(actual);
+
+  const ceroY = (uMin<0 && uMax>0) ? yU(0) : null;
+  const marcado = l => lotesSel.length===0 || lotesSel.includes(l);
+
+  box.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;overflow:visible"
+       role="img" aria-label="Utilidad y costo por libra en cada lote">
+    <line x1="${mL}" y1="${mT}" x2="${mL}" y2="${mT+h}" stroke="var(--line)"/>
+    <line x1="${mL+w}" y1="${mT}" x2="${mL+w}" y2="${mT+h}" stroke="var(--line)"/>
+    <line x1="${mL}" y1="${mT+h}" x2="${mL+w}" y2="${mT+h}" stroke="var(--line)"/>
+    ${ceroY!==null ? `<line x1="${mL}" y1="${ceroY.toFixed(1)}" x2="${mL+w}" y2="${ceroY.toFixed(1)}"
+        stroke="var(--ink-soft)" stroke-dasharray="4 4" opacity=".5"/>` : ''}
+
+    <text x="${mL-8}" y="${(mT+4)}" text-anchor="end" font-size="11" font-family="var(--mono)" fill="var(--ink-soft)">${money(uMax)}</text>
+    <text x="${mL-8}" y="${(mT+h)}" text-anchor="end" font-size="11" font-family="var(--mono)" fill="var(--ink-soft)">${money(uMin)}</text>
+    ${ceroY!==null ? `<text x="${mL-8}" y="${(ceroY+4).toFixed(1)}" text-anchor="end" font-size="11" font-family="var(--mono)" fill="var(--ink-soft)">$0</text>` : ''}
+
+    <text x="${mL+w+8}" y="${mT+4}" font-size="11" font-family="var(--mono)" fill="var(--maiz)">${money4(cMax)}</text>
+    <text x="${mL+w+8}" y="${mT+h}" font-size="11" font-family="var(--mono)" fill="var(--maiz)">$0</text>
+
+    <polyline points="${puntosU}" fill="none" stroke="var(--verde)" stroke-width="2.5"
+              stroke-linejoin="round" stroke-linecap="round"/>
+    ${tramos.map(t=>`<polyline points="${t.join(' ')}" fill="none" stroke="var(--maiz)"
+              stroke-width="2.5" stroke-dasharray="6 4" stroke-linejoin="round"/>`).join('')}
+
+    ${datos.map((d,i)=>`
+      <circle cx="${px(i)}" cy="${yU(d.utilidad).toFixed(1)}" r="${marcado(d.lote)?5:3.5}"
+              fill="${marcado(d.lote)?'var(--verde)':'var(--surface)'}" stroke="var(--verde)" stroke-width="2"/>
+      ${d.costoLb!==null ? `<circle cx="${px(i)}" cy="${yC(d.costoLb).toFixed(1)}" r="${marcado(d.lote)?5:3.5}"
+              fill="${marcado(d.lote)?'var(--maiz)':'var(--surface)'}" stroke="var(--maiz)" stroke-width="2"/>` : ''}
+      <text x="${px(i)}" y="${mT+h+18}" text-anchor="middle" font-size="12"
+            font-family="var(--mono)" fill="${marcado(d.lote)?'var(--ink)':'var(--ink-soft)'}">${escapeHtml(d.lote)}</text>
+      <text x="${px(i)}" y="${mT+h+32}" text-anchor="middle" font-size="10.5"
+            font-family="var(--mono)" fill="var(--ink-soft)">${d.costoLb!==null?money4(d.costoLb)+'/lb':''}</text>
+    `).join('')}
+  </svg>`;
+}
+
+/* ---------------------------- Formulario ------------------------------- */
+function calcTotal(){
+  const campo = document.getElementById('f-total');
+  if(campo.dataset.tocado==='1') return;
+  const u = parseFloat(document.getElementById('f-unidades').value)||0;
+  const p = parseFloat(document.getElementById('f-precio').value)||0;
+  campo.value = (u*p).toFixed(2);
+}
+document.getElementById('f-total').addEventListener('input', e => { e.target.dataset.tocado='1'; });
+
+function aplicarValoracion(){
+  const v = document.getElementById('f-valoracion').value;
+  document.getElementById('wrapAmort').hidden = (v!=='Activo');
+  document.getElementById('calcHint').textContent = (v==='Activo')
+    ? 'El costo se divide entre ese número de lotes, empezando por el lote elegido.'
+    : 'El total se calcula solo; puedes corregirlo si hubo descuento.';
+  if(editandoId) return;
+  document.getElementById('f-status').value = (v==='Ingreso') ? 'Cobrado' : 'Pagado';
+  document.getElementById('f-medida').value = (v==='Ingreso') ? 'libras' : 'unidades';
+}
+
+function leerForm(){
+  return {
+    fecha: document.getElementById('f-fecha').value,
+    lote: document.getElementById('f-lote').value,
+    descripcion: document.getElementById('f-desc').value.trim(),
+    unidades: parseFloat(document.getElementById('f-unidades').value)||0,
+    medida: document.getElementById('f-medida').value,
+    precioUnidad: parseFloat(document.getElementById('f-precio').value)||0,
+    totalCosto: parseFloat(document.getElementById('f-total').value)||0,
+    valoracion: document.getElementById('f-valoracion').value,
+    contraparte: document.getElementById('f-contraparte').value.trim(),
+    status: document.getElementById('f-status').value,
+    observacion: document.getElementById('f-obs').value.trim(),
+    amortizar: Math.max(1, parseInt(document.getElementById('f-amortizar').value,10)||1)
+  };
+}
+
+async function handleSubmit(e){
+  e.preventDefault();
+  const d = leerForm();
+  if(!d.fecha || !d.descripcion) return;
+  if(!d.lote || d.lote===NUEVO_LOTE){ alert('Elige un lote antes de guardar.'); return; }
+  if(d.valoracion!=='Activo') d.amortizar = 1;
+
+  const btn = document.getElementById('submitBtn');
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try{
+    if(editandoId){
+      const previo = registros.find(r=>r.id===editandoId) || {};
+      await apiPost({ action:'updateMovimiento', data:{ ...d, id:editandoId, creado:previo.creado } });
+      cancelarEdicion();
+    }else{
+      const id = Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      await apiPost({ action:'addMovimiento', data:{ ...d, id, creado:todayISO() } });
+      limpiarCampos(d.lote, d.fecha);
+    }
+    await refreshData();
+  }catch(err){
+    alert('NO SE GUARDÓ\n\n'+err.message);
+  }finally{
+    btn.disabled = false; btn.textContent = original;
+  }
+}
+
+function limpiarCampos(lote, fecha){
+  ['f-desc','f-precio','f-total','f-obs'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-unidades').value='1';
+  document.getElementById('f-amortizar').value='1';
+  document.getElementById('f-total').dataset.tocado='';
+  loteForm = lote;
+  document.getElementById('f-fecha').value = fecha;
+  document.getElementById('f-desc').focus();
+}
+
+function editar(id){
+  const r = registros.find(x=>x.id===id);
+  if(!r) return;
+  editandoId = id;
+  loteForm = r.lote || '';
+  poblarListas();
+  document.getElementById('f-fecha').value = r.fecha||'';
+  document.getElementById('f-desc').value = r.descripcion||'';
+  document.getElementById('f-unidades').value = r.unidades;
+  document.getElementById('f-medida').value = r.medida||'unidades';
+  document.getElementById('f-precio').value = r.precioUnidad;
+  document.getElementById('f-total').value = r.totalCosto;
+  const cuadra = Math.abs(r.unidades*r.precioUnidad - r.totalCosto) < 0.005;
+  document.getElementById('f-total').dataset.tocado = cuadra ? '' : '1';
+  document.getElementById('f-valoracion').value = r.valoracion||'Inversión';
+  document.getElementById('f-amortizar').value = r.amortizar||1;
+  document.getElementById('f-contraparte').value = r.contraparte||'';
+  document.getElementById('f-status').value = r.status||'Pagado';
+  document.getElementById('f-obs').value = r.observacion||'';
+  aplicarValoracion();
+  document.getElementById('formTitle').textContent = 'Editando movimiento';
+  document.getElementById('submitBtn').textContent = 'Guardar cambios';
+  document.getElementById('cancelBtn').hidden = false;
+  document.getElementById('formPanel').classList.add('editando');
+  document.getElementById('formPanel').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function cancelarEdicion(){
+  editandoId = null;
+  document.getElementById('movForm').reset();
+  document.getElementById('f-fecha').value = todayISO();
+  document.getElementById('f-total').dataset.tocado='';
+  poblarListas(); aplicarValoracion();
+  document.getElementById('formTitle').textContent = 'Nuevo movimiento';
+  document.getElementById('submitBtn').textContent = 'Guardar movimiento';
+  document.getElementById('cancelBtn').hidden = true;
+  document.getElementById('formPanel').classList.remove('editando');
+}
+
+async function eliminar(id){
+  const r = registros.find(x=>x.id===id);
+  if(!confirm(`¿Eliminar "${r ? r.descripcion : 'este movimiento'}"?`)) return;
+  try{ await apiPost({action:'deleteMovimiento', id}); await refreshData(); }
+  catch(e){ alert('NO SE ELIMINÓ\n\n'+e.message); }
+}
+
+/* ------------------------- Filtros y listas ---------------------------- */
+function setFiltro(k,v){ filtros[k] = (k==='texto') ? v.toLowerCase() : v; render(); }
+function toggleHist(){
+  histAbierto = !histAbierto;
+  document.getElementById('listContainer').hidden = !histAbierto;
+  document.getElementById('histBtn').setAttribute('aria-expanded', histAbierto);
+  render();
+}
+
+function poblarListas(){
+  if(!lotesAsc().length) lotesExtra = ['L001'];
+  const lista = lotesAsc();
+
+  if(!lista.includes(loteForm)) loteForm = lista[lista.length-1] || '';
+  const selForm = document.getElementById('f-lote');
+  selForm.innerHTML = lista.slice().reverse().map(l=>`<option>${escapeHtml(l)}</option>`).join('')
+                    + `<option value="${NUEVO_LOTE}">➕ Nuevo lote…</option>`;
+  selForm.value = loteForm;
+
+  const descs = [...new Set([...SEED_DESC, ...registros.map(r=>r.descripcion).filter(Boolean)])];
+  document.getElementById('descripciones').innerHTML = descs.map(d=>`<option value="${escapeHtml(d)}">`).join('');
+  const partes = [...new Set(registros.map(r=>r.contraparte).filter(Boolean))].sort();
+  document.getElementById('contrapartes').innerHTML = partes.map(p=>`<option value="${escapeHtml(p)}">`).join('');
+
+  poblarChips();
+}
+
+function filtrados(){
+  const sel = seleccion();
+  return registros.filter(r=>{
+    if(!sel.includes(r.lote)) return false;
+    if(filtros.valoracion!=='Todas' && r.valoracion!==filtros.valoracion) return false;
+    if(filtros.status!=='Todas' && r.status!==filtros.status) return false;
+    if(filtros.texto){
+      const t = `${r.descripcion||''} ${r.contraparte||''} ${r.observacion||''}`.toLowerCase();
+      if(!t.includes(filtros.texto)) return false;
+    }
+    return true;
+  }).sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)));
+}
+
+/* ------------------------------ Render --------------------------------- */
+function render(){
+  pintarResumen();
+  pintarGrafico();
+
+  const items = filtrados();
+  document.getElementById('histCont').textContent =
+    `${items.length} movimiento${items.length===1?'':'s'} ${histAbierto?'▴':'▾'}`;
+
+  const cont = document.getElementById('listContainer');
+  if(!histAbierto) return;
+
+  if(!items.length){
+    cont.innerHTML = `<div class="empty">No hay movimientos con estos filtros.</div>`;
+    return;
+  }
+
+  const grupos = {};
+  items.forEach(r=>{ (grupos[r.fecha] = grupos[r.fecha] || []).push(r); });
+
+  cont.innerHTML = Object.keys(grupos).map(fecha=>`
+    <div class="fecha-head">${escapeHtml(fechaLarga(fecha))}</div>
+    <div class="list">${grupos[fecha].map(r=>{
+      const ing = r.valoracion==='Ingreso';
+      const act = r.valoracion==='Activo';
+      return `
+      <div class="card ${ing?'ingreso':''}${act?'activo':''}">
+        <div class="card-body">
+          <div class="card-desc">${escapeHtml(r.descripcion)}</div>
+          <div class="card-meta">
+            <span class="mono">${escapeHtml(r.lote)}</span> ·
+            <span class="mono">${num(r.unidades)} ${escapeHtml(r.medida)} × ${money(r.precioUnidad)}</span>
+            ${r.contraparte ? ' · '+escapeHtml(r.contraparte) : ''}
+          </div>
+          ${act && r.amortizar>1 ? `<div style="margin-top:5px"><span class="chip reparto">reparte en ${r.amortizar} lotes · ${money(r.totalCosto/r.amortizar)} c/u</span></div>` : ''}
+          ${r.observacion ? `<div class="card-obs">${escapeHtml(r.observacion)}</div>` : ''}
+        </div>
+        <div class="card-right">
+          <div class="monto ${ing?'ingreso':''}">${ing?'+':'−'}${money(r.totalCosto)}</div>
+          <span class="chip ${esPendiente(r.status)?'pendiente':(ing?'ok':'')}">${escapeHtml(r.status||'—')}</span>
+          <div class="acciones">
+            <button type="button" class="icon-btn" title="Editar" onclick="editar('${r.id}')">✎</button>
+            <button type="button" class="icon-btn del" title="Eliminar" onclick="eliminar('${r.id}')">✕</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}</div>`).join('');
+}
+
+/* ------------------------------ Excel ---------------------------------- */
+function exportToExcel(){
+  const base = filtrados();
+  if(!base.length){ alert('No hay movimientos que exportar.'); return; }
+  const rows = base.slice().sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)))
+    .map(r=>({
+      'Fecha': r.fecha, 'Lote': r.lote, 'Descripción': r.descripcion,
+      'Cantidad': r.unidades, 'Medida': r.medida,
+      'Precio Unidad': r.precioUnidad, 'Total Costo': r.totalCosto,
+      'Valoración': r.valoracion, 'Repartir en': r.amortizar,
+      'Cliente / Proveedor': r.contraparte, 'Status': r.status, 'Observación': r.observacion
+    }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:11},{wch:7},{wch:26},{wch:10},{wch:10},{wch:13},{wch:12},{wch:12},{wch:11},{wch:20},{wch:12},{wch:26}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Movimientos');
+  const etiqueta = lotesSel.length ? lotesSel.join('-') : 'todos';
+  XLSX.writeFile(wb, `canosito_${etiqueta}_${todayISO()}.xlsx`);
+}
+
+/* ------------------------------- Init ---------------------------------- */
+async function init(){
+  document.getElementById('f-fecha').value = todayISO();
+  poblarListas(); aplicarValoracion();
+  if(!API_URL || API_URL.indexOf('PEGA_AQUI')!==-1){
+    document.getElementById('syncLabel').textContent = 'Sin configurar';
+    document.getElementById('chartBox').innerHTML =
+      `<div class="empty">Falta pegar la URL de Apps Script en <code>API_URL</code>.</div>`;
+    return;
+  }
+  await refreshData();
+}
+init();
+</script>
+</body>
+</html>
